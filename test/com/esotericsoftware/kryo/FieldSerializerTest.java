@@ -336,7 +336,7 @@ public class FieldSerializerTest extends KryoTestCase {
 
 		kryo.register(HasPrivateConstructor.class);
 		roundTrip(4, 4, test);
-		assertEquals("Default constructor should not be invoked with StdInstantiatorStrategy strategy", 25,
+		assertEquals("Default constructor should not be invoked with StdInstantiatorStrategy strategy", 10,
 			HasPrivateConstructor.invocations);
 	}
 

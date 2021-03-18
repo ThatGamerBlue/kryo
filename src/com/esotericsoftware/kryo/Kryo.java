@@ -122,8 +122,6 @@ public class Kryo {
 	private IdentityMap originalToCopy;
 	private Object needsCopyReference;
 	private Generics genericsScope;
-	/** Tells if ASM-based backend should be used by new serializer instances created using this Kryo instance. */
-	private boolean asmEnabled = false;
 
 	private StreamFactory streamFactory;
 
@@ -1148,23 +1146,6 @@ public class Kryo {
 
 	public void setStreamFactory (StreamFactory streamFactory) {
 		this.streamFactory = streamFactory;
-	}
-
-	/** Tells Kryo, if ASM-based backend should be used by new serializer instances created using this Kryo instance. Already
-	 * existing serializer instances are not affected by this setting.
-	 * 
-	 * <p>
-	 * By default, Kryo uses ASM-based backend.
-	 * </p>
-	 * 
-	 * @param flag if true, ASM-based backend will be used. Otherwise Unsafe-based backend could be used by some serializers, e.g.
-	 *           FieldSerializer */
-	public void setAsmEnabled (boolean flag) {
-		this.asmEnabled = flag;
-	}
-
-	public boolean getAsmEnabled () {
-		return asmEnabled;
 	}
 
 	static public class DefaultInstantiatorStrategy implements org.objenesis.strategy.InstantiatorStrategy {

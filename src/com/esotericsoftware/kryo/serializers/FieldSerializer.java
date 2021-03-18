@@ -59,9 +59,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 	private boolean fieldsCanBeNull = true, setFieldsAsAccessible = true;
 	private boolean ignoreSyntheticFields = true;
 	private boolean fixedFieldTypes;
-	/** If set, ASM-backend is used. Otherwise Unsafe-based backend or reflection is used */
-	private boolean useAsmEnabled;
-	private FieldSerializerUnsafeUtil unsafeUtil;
 
 	private FieldSerializerGenericsUtil genericsUtil;
 	
@@ -90,30 +87,10 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 	/** If set, transient fields will be serialized */
 	private final boolean serializeTransient = false;
 
-	private boolean hasObjectFields = false;
-
 	static CachedFieldFactory asmFieldFactory;
 	static CachedFieldFactory objectFieldFactory;
-	static CachedFieldFactory unsafeFieldFactory;
-
-	static boolean unsafeAvailable;
-	static Class<?> unsafeUtilClass;
-	static Method sortFieldsByOffsetMethod;
-
-	static {
-		try {
-			unsafeUtilClass = FieldSerializer.class.getClassLoader().loadClass("com.esotericsoftware.kryo.util.UnsafeUtil");
-			Method unsafeMethod = unsafeUtilClass.getMethod("unsafe");
-			sortFieldsByOffsetMethod = unsafeUtilClass.getMethod("sortFieldsByOffset", List.class);
-			Object unsafe = unsafeMethod.invoke(null);
-			if (unsafe != null) unsafeAvailable = true;
-		} catch (Throwable e) {
-			if (TRACE) trace("kryo", "sun.misc.Unsafe is unavailable.");
-		}
-	}
 
 	{
-		useAsmEnabled = !unsafeAvailable;
 		varIntsEnabled = true;
 		if (TRACE) trace("kryo", "Optimize ints: " + varIntsEnabled);
 	}
@@ -122,13 +99,7 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 		this.kryo = kryo;
 		this.type = type;
 		this.typeParameters = type.getTypeParameters();
-		this.useAsmEnabled = kryo.getAsmEnabled();
-		if (!this.useAsmEnabled && !unsafeAvailable) {
-			this.useAsmEnabled = true;
-			if (TRACE) trace("kryo", "sun.misc.Unsafe is unavailable, using ASM.");
-		}
 		this.genericsUtil = new FieldSerializerGenericsUtil(this);
-		this.unsafeUtil = FieldSerializerUnsafeUtil.Factory.getInstance(this);
 		this.annotationsUtil = new FieldSerializerAnnotationsUtil(this);
 		rebuildCachedFields();
 	}
@@ -138,13 +109,7 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 		this.type = type;
 		this.generics = generics;
 		this.typeParameters = type.getTypeParameters();
-		this.useAsmEnabled = kryo.getAsmEnabled();
-		if (!this.useAsmEnabled && !unsafeAvailable) {
-			this.useAsmEnabled = true;
-			if (TRACE) trace("kryo", "sun.misc.Unsafe is unavailable, using ASM.");
-		}
 		this.genericsUtil = new FieldSerializerGenericsUtil(this);
-		this.unsafeUtil = FieldSerializerUnsafeUtil.Factory.getInstance(this);
 		this.annotationsUtil = new FieldSerializerAnnotationsUtil(this);
 		rebuildCachedFields();
 	}
@@ -170,8 +135,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 			fields = new CachedField[0]; // No fields to serialize.
 			return;
 		}
-
-		hasObjectFields = false;
 
 		// For generic classes, generate a mapping from type variable names to the concrete types
 		// This mapping is the same for the whole class.
@@ -202,16 +165,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 
 			ObjectMap context = kryo.getContext();
 
-			// Sort fields by their offsets
-			if (useMemRegions && !useAsmEnabled && unsafeAvailable) {
-				try {
-					Field[] allFieldsArray = (Field[])sortFieldsByOffsetMethod.invoke(null, allFields);
-					allFields = Arrays.asList(allFieldsArray);
-				} catch (Exception e) {
-					throw new RuntimeException("Cannot invoke UnsafeUtil.sortFieldsByOffset()", e);
-				}
-			}
-
 			// TODO: useAsm is modified as a side effect, this should be pulled out of buildValidFields
 			// Build a list of valid non-transient fields
 			validFields = buildValidFields(false, allFields, context, useAsm);
@@ -219,7 +172,7 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 			validTransientFields = buildValidFields(true, allFields, context, useAsm);
 
 			// Use ReflectASM for any public fields.
-			if (useAsmEnabled && !Util.isAndroid && Modifier.isPublic(type.getModifiers()) && useAsm.indexOf(1) != -1) {
+			if (!Util.isAndroid && Modifier.isPublic(type.getModifiers()) && useAsm.indexOf(1) != -1) {
 				try {
 					access = FieldAccess.get(type);
 				} catch (RuntimeException ignored) {
@@ -299,15 +252,11 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 
 	private void createCachedFields (IntArray useAsm, List<Field> validFields, List<CachedField> cachedFields, int baseIndex) {
 
-		if (useAsmEnabled || !useMemRegions) {
-			for (int i = 0, n = validFields.size(); i < n; i++) {
-				Field field = validFields.get(i);
-				int accessIndex = -1;
-				if (access != null && useAsm.get(baseIndex + i) == 1) accessIndex = ((FieldAccess)access).getIndex(field.getName());
-				cachedFields.add(newCachedField(field, cachedFields.size(), accessIndex));
-			}
-		} else {
-			unsafeUtil.createUnsafeCacheFieldsAndRegions(validFields, cachedFields, baseIndex, useAsm);
+		for (int i = 0, n = validFields.size(); i < n; i++) {
+			Field field = validFields.get(i);
+			int accessIndex = -1;
+			if (access != null && useAsm.get(baseIndex + i) == 1) accessIndex = ((FieldAccess)access).getIndex(field.getName());
+			cachedFields.add(newCachedField(field, cachedFields.size(), accessIndex));
 		}
 	}
 
@@ -345,16 +294,8 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 			cachedField = genericsUtil.newCachedFieldOfGenericType(field, accessIndex, fieldClass, fieldGenericType);
 		}
 
-		if (cachedField instanceof ObjectField) {
-			hasObjectFields = true;
-		}
-
 		cachedField.field = field;
 		cachedField.varIntsEnabled = varIntsEnabled;
-
-		if (!useAsmEnabled) {
-			cachedField.offset = unsafeUtil.getObjectFieldOffset(field);
-		}
 
 		cachedField.access = (FieldAccess)access;
 		cachedField.accessIndex = accessIndex;
@@ -371,8 +312,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 		CachedField cachedField;
 		if (accessIndex != -1) {
 			cachedField = getAsmFieldFactory().createCachedField(fieldClass, field, this);
-		} else if (!useAsmEnabled) {
-			cachedField = getUnsafeFieldFactory().createCachedField(fieldClass, field, this);
 		} else {
 			cachedField = getObjectFieldFactory().createCachedField(fieldClass, field, this);
 			if (fieldGenerics != null)
@@ -394,21 +333,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 	private CachedFieldFactory getObjectFieldFactory () {
 		if (objectFieldFactory == null) objectFieldFactory = new ObjectCachedFieldFactory();
 		return objectFieldFactory;
-	}
-
-	private CachedFieldFactory getUnsafeFieldFactory () {
-		// Use reflection to load UnsafeFieldFactory, so that there is no explicit dependency
-		// on anything using Unsafe. This is required to make FieldSerializer work on those
-		// platforms that do not support sun.misc.Unsafe properly.
-		if (unsafeFieldFactory == null) {
-			try {
-				unsafeFieldFactory = (CachedFieldFactory)this.getClass().getClassLoader()
-					.loadClass("com.esotericsoftware.kryo.serializers.UnsafeCachedFieldFactory").newInstance();
-			} catch (Exception e) {
-				throw new RuntimeException("Cannot create UnsafeFieldFactory", e);
-			}
-		}
-		return unsafeFieldFactory;
 	}
 
 	public int compare (CachedField o1, CachedField o2) {
@@ -450,19 +374,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 	public void setFixedFieldTypes (boolean fixedFieldTypes) {
 		this.fixedFieldTypes = fixedFieldTypes;
 		if (TRACE) trace("kryo", "setFixedFieldTypes: " + fixedFieldTypes);
-		rebuildCachedFields();
-	}
-
-	/** Controls whether ASM should be used. Calling this method resets the {@link #getFields() cached fields}.
-	 * @param setUseAsm If true, ASM will be used for fast serialization. If false, Unsafe will be used (default) */
-	public void setUseAsm (boolean setUseAsm) {
-		useAsmEnabled = setUseAsm;
-		if (!useAsmEnabled && !unsafeAvailable) {
-			useAsmEnabled = true;
-			if (TRACE) trace("kryo", "sun.misc.Unsafe is unavailable, using ASM.");
-		}
-		// optimizeInts = useAsmBackend;
-		if (TRACE) trace("kryo", "setUseAsm: " + setUseAsm);
 		rebuildCachedFields();
 	}
 
@@ -600,10 +511,6 @@ public class FieldSerializer<T> extends Serializer<T> implements Comparator<Fiel
 
 	public Kryo getKryo () {
 		return kryo;
-	}
-
-	public boolean getUseAsmEnabled () {
-		return useAsmEnabled;
 	}
 
 	public boolean getUseMemRegions () {

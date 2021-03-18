@@ -16,13 +16,6 @@ import com.esotericsoftware.kryo.io.FastInput;
 import com.esotericsoftware.kryo.io.FastOutput;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.io.ByteBufferInput;
-import com.esotericsoftware.kryo.io.ByteBufferOutput;
-import com.esotericsoftware.kryo.io.UnsafeInput;
-import com.esotericsoftware.kryo.io.UnsafeOutput;
-import com.esotericsoftware.kryo.io.UnsafeMemoryInput;
-import com.esotericsoftware.kryo.io.UnsafeMemoryOutput;
-import com.esotericsoftware.minlog.Log;
 
 /**
  * Convenience methods for round tripping objects.
@@ -58,72 +51,6 @@ abstract public class KryoTestCase extends TestCase {
 	}
 
 	public <T> T roundTrip(int length, int unsafeLength, T object1) {
-		
-		roundTripWithStreamFactory(unsafeLength, object1, new StreamFactory() {
-			public Output createOutput(OutputStream os) {
-				return new UnsafeMemoryOutput(os);
-			}
-
-			public Output createOutput(OutputStream os, int size) {
-				return new UnsafeMemoryOutput(os, size);
-			}
-
-			public Output createOutput(int size, int limit) {
-				return new UnsafeMemoryOutput(size, limit);
-			}
-
-			public Input createInput(InputStream os, int size) {
-				return new UnsafeMemoryInput(os, size);
-			}
-
-			public Input createInput(byte[] buffer) {
-				return new UnsafeMemoryInput(buffer);
-			}
-		});
-
-		roundTripWithStreamFactory(unsafeLength, object1, new StreamFactory() {
-			public Output createOutput(OutputStream os) {
-				return new UnsafeOutput(os);
-			}
-
-			public Output createOutput(OutputStream os, int size) {
-				return new UnsafeOutput(os, size);
-			}
-
-			public Output createOutput(int size, int limit) {
-				return new UnsafeOutput(size, limit);
-			}
-
-			public Input createInput(InputStream os, int size) {
-				return new UnsafeInput(os, size);
-			}
-
-			public Input createInput(byte[] buffer) {
-				return new UnsafeInput(buffer);
-			}
-		});
-		
-		roundTripWithStreamFactory(length, object1, new StreamFactory() {
-			public Output createOutput(OutputStream os) {
-				return new ByteBufferOutput(os);
-			}
-
-			public Output createOutput(OutputStream os, int size) {
-				return new ByteBufferOutput(os, size);
-			}
-
-			public Output createOutput(int size, int limit) {
-				return new ByteBufferOutput(size, limit);
-			}
-
-			public Input createInput(InputStream os, int size) {
-				return new ByteBufferInput(os, size);
-			}
-
-			public Input createInput(byte[] buffer) {
-				return new ByteBufferInput(buffer);
-			}
-		});
 
 		roundTripWithStreamFactory(unsafeLength, object1, new StreamFactory() {
 			public Output createOutput(OutputStream os) {
