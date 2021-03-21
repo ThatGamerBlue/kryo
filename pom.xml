@@ -70,10 +70,25 @@
 		</dependency>
 	</dependencies>
 
+	<distributionManagement>
+		<repository>
+			<id>blue-ftp</id>
+			<url>scp://new.server/var/www/html/maven</url>
+		</repository>
+	</distributionManagement>
+
 	<build>
 		<!-- Set nonstandard source and test source dirs -->
 		<sourceDirectory>src</sourceDirectory>
 		<testSourceDirectory>test</testSourceDirectory>
+
+		<extensions>
+			<extension>
+				<groupId>org.apache.maven.wagon</groupId>
+				<artifactId>wagon-ssh</artifactId>
+				<version>2.12</version>
+			</extension>
+		</extensions>
 
 		<pluginManagement>
 			<plugins>
@@ -174,26 +189,6 @@
 						<Export-Package>com.esotericsoftware.kryo*,com.esotericsoftware.reflectasm*</Export-Package>
 					</instructions>
 				</configuration>
-			</plugin>
-			<plugin>
-				<artifactId>maven-assembly-plugin</artifactId>
-				<version>2.4.1</version>
-				<configuration>
-					<descriptor>etc/assembly-all.xml</descriptor>
-				</configuration>
-				<!--
-					According to http://stackoverflow.com/questions/2244344/deploying-assembly-package-with-maven-release-plugin
-					this should add the assembly zip to the files uploaded during release:perform/deploy.
-				-->
-				<executions>
-					<execution>
-						<id>dist-assembly</id>
-						<phase>package</phase>
-						<goals>
-							<goal>single</goal>
-						</goals>
-					</execution>
-				</executions>
 			</plugin>
 		</plugins>
 	</build>
