@@ -488,7 +488,7 @@ public class SerializationBenchmarkTest extends KryoTestCase {
 		Log.WARN();
 	}
 
-	private static class SampleObject implements Externalizable, KryoSerializable {
+	public static class SampleObject implements Externalizable, KryoSerializable {
 		private int intVal;
 		private float floatVal;
 		private Short shortVal;
